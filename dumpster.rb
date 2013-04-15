@@ -44,14 +44,14 @@ def launch_tcpdump
       newdir = SCRIPT_DIR + '/' + OUTDIR + '/' + "port_#{p}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
-      exec_str = "tcpdump -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum}"
+      exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum}"
       puts exec_str
       exec exec_str
     end
 
     # parent
-    pids.push(newpid)  
-    sleep(0.1)
+    pids << newpid
+    sleep(0.2)
   end
   sleep
 rescue Interrupt  => e
