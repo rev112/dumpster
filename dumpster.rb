@@ -27,6 +27,7 @@ end
 def launch_tcpdump
   check_ports()
   pids = []
+  main_pid = Process.pid
   PORTS.each do |p|
     newpid = fork do
       # child    
@@ -44,7 +45,7 @@ def launch_tcpdump
       newdir = SCRIPT_DIR + '/' + OUTDIR + '/' + "port_#{p}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
-      exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum}"
+      exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
       puts exec_str
       exec exec_str
     end
