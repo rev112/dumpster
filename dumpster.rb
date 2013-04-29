@@ -68,7 +68,7 @@ end
 def show_usage
   res = <<-USAGE
 Usage: dumpster.rb [-o DIR]
-  -o, --outdir      Output directory (default is 'outdumps')
+  -o, --outdir      Output directory (default is #{DEFAULT_OUTDIR})
   -h, --help        Show this help
   USAGE
   print res
@@ -76,7 +76,6 @@ end
 
 ### MAIN
 
-abort 'Must run as root!' unless Process.uid == 0
 outdir ||= DEFAULT_OUTDIR
 
 optparse = OptionParser.new do |opts|
@@ -91,5 +90,5 @@ optparse = OptionParser.new do |opts|
 end
 optparse.parse!
 
-
+abort 'Must run as root!' unless Process.uid == 0
 launch_tcpdump(outdir)
