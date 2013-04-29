@@ -5,12 +5,16 @@ require 'optparse'
 ###
 # t1234 - TCP port 1234
 # u2345 - UDP port 2345
-PORTS = ['t1234', 'u2345', 't1235', 't1236']
+PORTS = %w/
+            t1234
+            u2345
+            t80 t443
+          /
 
 MAXSIZE = 20  # in MB
 INTERFACE = 'lo'
 OUTFILE = 'dump_out'
-DEFAULT_OUTDIR = 'outdumps'
+DEFAULT_OUTDIR = 'OUTDUMPS'
 
 SCRIPT_DIR = File.expand_path(File.dirname(__FILE__))
 
@@ -33,20 +37,17 @@ def launch_tcpdump(outdir)
   PORTS.each do |p|
     newpid = fork do
       # child    
-      proto = ''
-      if p[0] == 't' 
-        proto = 'tcp'
-      elsif p[0] == 'u'
-        proto = 'udp'
-      else
-        puts ">>> PORT ERROR: #{p}. Use 't1234' format."
-        raise "PortError Exception"
-      end
+      proto = case p[0]
+              when 't' then 'tcp'
+              when 'u' then 'udp'
+              else abort ">>> PORT ERROR: #{p}. Use 't1234' format."
+              end
       portnum = p[1..-1].to_i
-      puts ">>> Capturing #{proto.upcase} port #{portnum}...\n"
+      puts "\n>>> Capturing #{proto.upcase} port #{portnum}...\n"
       newdir = SCRIPT_DIR + '/' + outdir + '/' + "port_#{p}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
+      File.chmod(0700, '.')
       exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
       puts exec_str
       exec exec_str
@@ -75,6 +76,7 @@ end
 
 ### MAIN
 
+abort 'Must run as root!' unless Process.uid == 0
 outdir ||= DEFAULT_OUTDIR
 
 optparse = OptionParser.new do |opts|
