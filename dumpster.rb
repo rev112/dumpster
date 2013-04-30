@@ -29,7 +29,7 @@ def check_ports(ports = PORTS)
   end
 end
 
-def launch_tcpdump(outdir)
+def launch_tcpdump(outdir, mode, host = nil)
   check_ports()
   pids = []
   main_pid = Process.pid
@@ -49,7 +49,13 @@ def launch_tcpdump(outdir)
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
       File.chmod(0700, '.')
-      exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
+      if mode == :local
+        exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
+      else
+        remote_str = "tcpdump -Z root -i #{INTERFACE} -w - #{proto} port #{portnum}"
+        split_str = "split - -b #{MAXSIZE}M -d -a 3"
+        exec_str = "ssh root@#{host} '#{remote_str}' | #{split_str} || kill -s INT #{main_pid}"
+      end
       puts exec_str
       exec exec_str
     end
@@ -78,10 +84,10 @@ end
 
 ### MAIN
 
-outdir ||= DEFAULT_OUTDIR
-
+outdir = DEFAULT_OUTDIR
 mode = :local
 remote_host = nil
+
 optparse = OptionParser.new do |opts|
   opts.on('-o OUTDIR', '--outdir', 'Output directory') do |out|
     outdir = out 
@@ -95,23 +101,11 @@ optparse = OptionParser.new do |opts|
   opts.on('-r HOST', '--remote', 'Show usage') do |remote|
     mode = :remote
     remote_host = remote
-    abort 'Not implemented!'
   end
 end
 optparse.parse!
 
 abort 'Must run as root!' unless Process.uid == 0
-launch_tcpdump(outdir)
+launch_tcpdump(outdir, mode, remote_host)
 puts 'Finished.'
-
-#TODO split file from the remote host
-
-proto = 'tcp'
-portnum = 123
-host = 'localhost'
-main_pid = 1234
-remote_str = "tcpdump -Z root -i #{INTERFACE} -w - #{proto} port #{portnum}"
-split_str = "split - -b #{MAXSIZE}M -d -a 3"
-exec_str = "ssh root@#{host} '#{remote_str}' | #{split_str} || kill -s INT #{main_pid}"
-puts exec_str
 
