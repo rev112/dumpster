@@ -15,12 +15,13 @@ MAXSIZE = 20  # in MB
 INTERFACE = 'lo'
 OUTFILE = 'dump_out'
 DEFAULT_OUTDIR = 'OUTDUMPS'
+TIMEOUT = 0.2 # in seconds
 
 SCRIPT_DIR = File.expand_path(File.dirname(__FILE__))
 
-def check_ports
-  abort ">>> NO PORTS GIVEN\n" if PORTS.empty?
-  PORTS.each do |p|
+def check_ports(ports = PORTS)
+  abort ">>> NO PORTS GIVEN\n" if ports.empty?
+  ports.each do |p|
     proto = p[0]
     abort ">>> PORT TYPE ERROR: #{p}\n" unless  ['t', 'u'].include?(proto)
     portnum = p[1..-1].to_i
@@ -55,13 +56,14 @@ def launch_tcpdump(outdir)
 
     # parent
     pids << newpid
-    sleep(0.2)
+    sleep(TIMEOUT)
   end
   sleep
-rescue Interrupt  => e
+rescue Interrupt
   pids.each do |pid|
     Process.kill "KILL", pid
   end
+  sleep(TIMEOUT)
   puts "\nInterrupted. Alpacas won't forget."
 end
 
@@ -78,6 +80,8 @@ end
 
 outdir ||= DEFAULT_OUTDIR
 
+mode = :local
+remote_host = nil
 optparse = OptionParser.new do |opts|
   opts.on('-o OUTDIR', '--outdir', 'Output directory') do |out|
     outdir = out 
@@ -87,8 +91,27 @@ optparse = OptionParser.new do |opts|
     show_usage()
     exit(0)
   end
+
+  opts.on('-r HOST', '--remote', 'Show usage') do |remote|
+    mode = :remote
+    remote_host = remote
+    abort 'Not implemented!'
+  end
 end
 optparse.parse!
 
 abort 'Must run as root!' unless Process.uid == 0
 launch_tcpdump(outdir)
+puts 'Finished.'
+
+#TODO split file from the remote host
+
+proto = 'tcp'
+portnum = 123
+host = 'localhost'
+main_pid = 1234
+remote_str = "tcpdump -Z root -i #{INTERFACE} -w - #{proto} port #{portnum}"
+split_str = "split - -b #{MAXSIZE}M -d -a 3"
+exec_str = "ssh root@#{host} '#{remote_str}' | #{split_str} || kill -s INT #{main_pid}"
+puts exec_str
+
