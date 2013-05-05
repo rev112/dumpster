@@ -29,33 +29,24 @@ def check_ports(ports = PORTS)
   end
 end
 
-def launch_tcpdump(outdir, mode, host = nil)
-  check_ports()
+def launch_local(options = {})
   pids = []
   main_pid = Process.pid
-  Dir.chdir(SCRIPT_DIR)
-  Dir.mkdir(outdir) unless File.exists?(outdir)
   PORTS.each do |p|
     newpid = fork do
-      # child    
+      # child
       proto = case p[0]
-              when 't' then 'tcp'
-              when 'u' then 'udp'
-              else abort ">>> PORT ERROR: #{p}. Use 't1234' format."
+                when 't' then 'tcp'
+                when 'u' then 'udp'
+                else abort ">>> PORT ERROR: #{p}. Use 't1234' format."
               end
       portnum = p[1..-1].to_i
       puts "\n>>> Capturing #{proto.upcase} port #{portnum}...\n"
-      newdir = SCRIPT_DIR + '/' + outdir + '/' + "port_#{p}"
+      newdir = SCRIPT_DIR + '/' + options[:outdir] + '/' + "port_#{p}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
       File.chmod(0700, '.')
-      if mode == :local
-        exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
-      else
-        remote_str = "tcpdump -Z root -i #{INTERFACE} -w - #{proto} port #{portnum}"
-        split_str = "split - -b #{MAXSIZE}M -d -a 3"
-        exec_str = "ssh root@#{host} '#{remote_str}' | #{split_str} || kill -s INT #{main_pid}"
-      end
+      exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
       puts exec_str
       exec exec_str
     end
@@ -73,24 +64,102 @@ rescue Interrupt
   puts "\nInterrupted. Alpacas won't forget."
 end
 
+def launch_remote(options = {})
+  abort 'Install net-ssh gem!' unless require 'net/ssh'
+
+  Net::SSH.start(options[:remote_host], 'root', :port => 22) do |ssh|
+    pids = []
+    out_pipes = []
+    PORTS.each do |port|
+      tcpdump_str = "tcpdump -U -i lo -w - tcp port #{port}"
+      # perl_wrapper_str = %q(perl -e 'print STDERR "$$\n";exec "@ARGV";print STDERR $!')
+      shell_wrapper_str = %q(echo $$>&2; exec)
+      exec_str = "#{shell_wrapper_str} #{tcpdump_str}"
+      is_pid_str = true
+      #split_out = IO.popen("split - -b 100 -d -a 3 out_#{port}", 'wb')
+      split_out = IO.popen("tcpdump -r - -w out_#{port}.pcap -C 1 2>/dev/null", 'wb')
+      out_pipes << split_out
+      ssh.exec(exec_str) do |ch, stream, data|
+        case stream
+          when :stdout
+            split_out.write(data)
+          when :stderr
+            if is_pid_str
+              pid = data.chomp.to_i
+              puts "PID: ##{pid}#"
+              pids << pid
+              is_pid_str = false
+            else
+              puts data
+            end
+        end
+      end
+    end
+
+    # loop until ctrl-C is pressed
+    int_pressed = false
+    trap("INT") do
+      p out_pipes
+      puts ssh.exec!("kill #{pids.join(' ')}")
+      int_pressed = true
+      puts "Interrupted!"
+    end
+    ssh.loop(0.1) { not int_pressed and ssh.busy? }
+    # close pipes
+    out_pipes.each {|p| p.close}
+    puts 'Finished.'
+  end
+
+end
+
+
+def launch_tcpdump(mode, options = {})
+  check_ports()
+  Dir.chdir(SCRIPT_DIR)
+  outdir = options[:outdir]
+  if File.exists?(outdir)
+    abort "ABORT: Invalid output directory. '#{outdir}' is not a directory." unless File.directory?(outdir)
+    res = ''
+    puts "Output directory '#{outdir}' already exists."
+    until ['y', 'n'].include? res.downcase
+      print "Overwrite? [y/n] "
+      res = gets().chomp
+    end
+    exit(1) if res == 'n'
+  else
+    Dir.mkdir(options[:outdir])
+  end
+
+  case mode
+  when :local
+    launch_local(options)
+  when :remote
+    launch_remote(options)
+  else
+    abort 'Invalid mode.'
+  end
+end
+
 def show_usage
   res = <<-USAGE
-Usage: dumpster.rb [-o DIR]
-  -o, --outdir      Output directory (default is #{DEFAULT_OUTDIR})
-  -h, --help        Show this help
+Usage: dumpster.rb [options]
+  -o, --outdir DIR    Output directory (default is #{DEFAULT_OUTDIR})
+  -h, --help          Show this help
+  -r, --remote HOST   Remote capture
   USAGE
   print res
 end
 
 ### MAIN
 
-outdir = DEFAULT_OUTDIR
+options = {}
+options[:outdir] = DEFAULT_OUTDIR
 mode = :local
 remote_host = nil
 
 optparse = OptionParser.new do |opts|
   opts.on('-o OUTDIR', '--outdir', 'Output directory') do |out|
-    outdir = out 
+    options[:outdir] = out
   end
 
   opts.on('-h', '--help', 'Show usage') do |out|
@@ -100,12 +169,12 @@ optparse = OptionParser.new do |opts|
 
   opts.on('-r HOST', '--remote', 'Show usage') do |remote|
     mode = :remote
-    remote_host = remote
+    options[:remote_host] = remote
   end
 end
 optparse.parse!
 
 abort 'Must run as root!' unless Process.uid == 0
-launch_tcpdump(outdir, mode, remote_host)
+launch_tcpdump(mode, options)
 puts 'Finished.'
 
