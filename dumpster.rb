@@ -12,7 +12,8 @@ PORTS = %w/
           /
 
 MAXSIZE = 20  # in MB
-OUTFILE = 'dump_out'
+LOCAL_OUTFILE = 'local_out'
+REMOTE_OUTFILE = 'remote_out'
 DEFAULT_OUTDIR = 'OUTDUMPS'
 TIMEOUT = 0.2 # in seconds
 
@@ -59,7 +60,7 @@ def launch_local(options = {})
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
       File.chmod(0700, '.')
-      exec_str = "tcpdump -Z root -i #{options[:interface]} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
+      exec_str = "tcpdump -Z root -i #{options[:interface]} -w #{LOCAL_OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
       puts exec_str
       exec exec_str
     end
@@ -96,7 +97,7 @@ def launch_remote(options = {})
       newdir = SCRIPT_DIR + '/' + options[:outdir] + '/' + "port_#{port}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
       File.chmod(0700, newdir)
-      popen_str = "tcpdump -r - -w #{newdir}/out_#{port}.pcap -C #{MAXSIZE} 2>/dev/null"
+      popen_str = "tcpdump -r - -w #{newdir}/#{REMOTE_OUTFILE}_#{port}.pcap -C #{MAXSIZE} 2>/dev/null"
       split_out = IO.popen(popen_str, 'wb')
       puts popen_str
       out_pipes << split_out
