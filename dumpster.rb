@@ -12,10 +12,11 @@ PORTS = %w/
           /
 
 MAXSIZE = 20  # in MB
-INTERFACE = 'lo'
 OUTFILE = 'dump_out'
 DEFAULT_OUTDIR = 'OUTDUMPS'
 TIMEOUT = 0.2 # in seconds
+
+#========================================================
 
 SCRIPT_DIR = File.expand_path(File.dirname(__FILE__))
 
@@ -42,7 +43,9 @@ def check_ports(ports = PORTS)
   end
 end
 
+# Launch local capture
 def launch_local(options = {})
+  puts ">>> Starting local capture..."
   pids = []
   main_pid = Process.pid
   puts ">>> Parent PID: #{main_pid}\n"
@@ -56,7 +59,7 @@ def launch_local(options = {})
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
       File.chmod(0700, '.')
-      exec_str = "tcpdump -Z root -i #{INTERFACE} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
+      exec_str = "tcpdump -Z root -i #{options[:interface]} -w #{OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
       puts exec_str
       exec exec_str
     end
@@ -74,23 +77,28 @@ rescue Interrupt
   puts "\nInterrupted. Alpacas won't forget."
 end
 
+# Launch remote capture
 def launch_remote(options = {})
-  abort 'Install net-ssh gem!' unless require 'net/ssh'
+  abort 'Install net-ssh gem! (for ex: gem install net-ssh)' unless require 'net/ssh'
 
+  puts ">>> Starting remote capture..."
   Net::SSH.start(options[:remote_host], options[:user], :port => options[:port]) do |ssh|
     pids = []
     out_pipes = []
     PORTS.each do |port|
-      next if get_proto(port) == 'u'
-      abort ">>> HEHE, SSH PORT, NICE TRY!\n" if port == 't' + options[:port]
-      port = get_portnum(port)
-      tcpdump_str = "tcpdump -U -i lo -w - tcp port #{port}"
-      # perl_wrapper_str = %q(perl -e 'print STDERR "$$\n";exec "@ARGV";print STDERR $!')
+      abort ">>> HEHE, SSH PORT, NICE TRY!\n" if port == 't' + options[:port].to_s
+      proto = get_proto(port)
+      portnum = get_portnum(port)
+      tcpdump_str = "tcpdump -U -i #{options[:interface]} -w - #{proto} port #{portnum}"
       shell_wrapper_str = %q(echo $$>&2; exec)
       exec_str = "#{shell_wrapper_str} #{tcpdump_str}"
       is_pid_str = true
-      #split_out = IO.popen("split - -b 100 -d -a 3 out_#{port}", 'wb')
-      split_out = IO.popen("tcpdump -r - -w out_#{port}.pcap -C 1 2>/dev/null", 'wb')
+      newdir = SCRIPT_DIR + '/' + options[:outdir] + '/' + "port_#{port}"
+      Dir.mkdir(newdir) unless File.exists?(newdir)
+      File.chmod(0700, newdir)
+      popen_str = "tcpdump -r - -w #{newdir}/out_#{port}.pcap -C #{MAXSIZE} 2>/dev/null"
+      split_out = IO.popen(popen_str, 'wb')
+      puts popen_str
       out_pipes << split_out
       ssh.exec(exec_str) do |ch, stream, data|
         case stream
@@ -117,7 +125,7 @@ def launch_remote(options = {})
       int_pressed = true
       puts "Interrupted!"
     end
-    ssh.loop(0.1) { not int_pressed and ssh.busy? }
+    ssh.loop(TIMEOUT) { not int_pressed and ssh.busy? }
     # close pipes
     out_pipes.each {|p| p.close}
     puts 'Finished remote capture.'
@@ -125,7 +133,7 @@ def launch_remote(options = {})
 
 end
 
-
+# Common function
 def launch_tcpdump(mode, options = {})
   check_ports()
   Dir.chdir(SCRIPT_DIR)
@@ -154,15 +162,6 @@ def launch_tcpdump(mode, options = {})
   end
 end
 
-def show_usage
-  res = <<-USAGE
-Usage: dumpster.rb [options]
-  -o, --outdir DIR    Output directory (default is #{DEFAULT_OUTDIR})
-  -h, --help          Show this help
-  -r, --remote HOST   Remote capture
-  USAGE
-  print res
-end
 
 ### MAIN
 
@@ -172,12 +171,12 @@ mode = :local
 remote_host = nil
 
 optparse = OptionParser.new do |opts|
-  opts.on('-o OUTDIR', '--outdir', 'Output directory') do |out|
+  opts.on('-o OUTDIR', '--outdir', 'Output directory (default: OUTDUMPS)') do |out|
     options[:outdir] = out
   end
 
   opts.on('-h', '--help', 'Show usage') do |out|
-    show_usage()
+    puts optparse.help
     exit(0)
   end
 
@@ -187,13 +186,18 @@ optparse = OptionParser.new do |opts|
   end
 
   options[:port] = 22
-  opts.on('-p PORT', '--port', 'Remote SSH port') do |port|
+  opts.on('-p PORT', '--port', 'Remote SSH port (default: 22)') do |port|
     options[:port] = port.to_i 
   end
 
   options[:user] = 'root'
-  opts.on('-u USER', '--user', 'Remote user') do |user|
+  opts.on('-u USER', '--user', 'Remote user (default: root)') do |user|
     options[:user] = user
+  end
+
+  options[:interface] = 'lo'
+  opts.on('-i INTERFACE', '--interface', 'Capture interface (default: lo)') do |i|
+    options[:interface] = i
   end
 end
 optparse.parse!
