@@ -1,11 +1,11 @@
 dumpster
 ========
 
-**dumpster** helps to capture network dumps.
+**dumpster** simplifies traffic capturing from several ports. 
 
-*Requirements:* tcpdump.
+*Requirements:* ruby, tcpdump, net-ssh gem (for remote captures)
 
-Tested on: Fedora 18 x64.
+Tested on: Fedora 18/19 x64.
 
 ## Usage
 
@@ -14,19 +14,26 @@ Tested on: Fedora 18 x64.
     `./dumpster.rb -h`
 
 
-2. Modify ports, for example:
+2. Modify port list in the beginning of the script, for example:
 
     ```ruby
     PORTS = ['t1234', 'u2345'] # captures traffic from ports 1234 (TCP) and 2345 (UDP)
     ```
 
-3. Launch **dumpster** (default output directory is 'outdumps')
+#### Local capture
 
-    `./dumpster.rb -o outdir`
+Launch **dumpster** (default output directory is 'OUTDUMPS')
+
+    `./dumpster.rb -o OUTDIR`
+
+#### Remote capture
+
+Launch **dumpster** with remote hostname, user (default: root) and port (default: 22):
+
+    `./dumpster.rb -r host.com -u root -p 2200`
 
 
 ## TODO
 
-* Capture from the remote host
-* Special dumps permissions?
+* Test dat
 
