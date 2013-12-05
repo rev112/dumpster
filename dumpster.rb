@@ -19,13 +19,26 @@ TIMEOUT = 0.2 # in seconds
 
 SCRIPT_DIR = File.expand_path(File.dirname(__FILE__))
 
+def get_proto(str)
+    proto = case str[0]
+              when 't' then 'tcp'
+              when 'u' then 'udp'
+              else abort ">>> PORT ERROR: #{str}. Use 't1234' format."
+            end
+    return proto
+end
+
+def get_portnum(str)
+    portnum = str[1..-1].to_i
+    abort ">>> PORT NUMBER ERROR: #{str}\n" unless portnum.between?(1, 2**16)
+    return portnum
+end
+
 def check_ports(ports = PORTS)
   abort ">>> NO PORTS GIVEN\n" if ports.empty?
   ports.each do |p|
-    proto = p[0]
-    abort ">>> PORT TYPE ERROR: #{p}\n" unless  ['t', 'u'].include?(proto)
-    portnum = p[1..-1].to_i
-    abort ">>> PORT NUMBER ERROR: #{p}\n" unless portnum.between?(1, 2**16)
+    get_proto(p)
+    get_portnum(p)
   end
 end
 
@@ -35,12 +48,8 @@ def launch_local(options = {})
   PORTS.each do |p|
     newpid = fork do
       # child
-      proto = case p[0]
-                when 't' then 'tcp'
-                when 'u' then 'udp'
-                else abort ">>> PORT ERROR: #{p}. Use 't1234' format."
-              end
-      portnum = p[1..-1].to_i
+      proto = get_proto(p)
+      portnum = get_portnum(p)
       puts "\n>>> Capturing #{proto.upcase} port #{portnum}...\n"
       newdir = SCRIPT_DIR + '/' + options[:outdir] + '/' + "port_#{p}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
@@ -67,10 +76,12 @@ end
 def launch_remote(options = {})
   abort 'Install net-ssh gem!' unless require 'net/ssh'
 
-  Net::SSH.start(options[:remote_host], 'root', :port => 22) do |ssh|
+  Net::SSH.start(options[:remote_host], options[:user], :port => options[:port]) do |ssh|
     pids = []
     out_pipes = []
     PORTS.each do |port|
+      next if port[0] == 'u'
+      port = port[1..-1]
       tcpdump_str = "tcpdump -U -i lo -w - tcp port #{port}"
       # perl_wrapper_str = %q(perl -e 'print STDERR "$$\n";exec "@ARGV";print STDERR $!')
       shell_wrapper_str = %q(echo $$>&2; exec)
@@ -107,7 +118,7 @@ def launch_remote(options = {})
     ssh.loop(0.1) { not int_pressed and ssh.busy? }
     # close pipes
     out_pipes.each {|p| p.close}
-    puts 'Finished.'
+    puts 'Finished remote capture.'
   end
 
 end
@@ -132,6 +143,7 @@ def launch_tcpdump(mode, options = {})
 
   case mode
   when :local
+    abort 'Must run as root!' unless Process.uid == 0
     launch_local(options)
   when :remote
     launch_remote(options)
@@ -167,14 +179,23 @@ optparse = OptionParser.new do |opts|
     exit(0)
   end
 
-  opts.on('-r HOST', '--remote', 'Show usage') do |remote|
+  opts.on('-r HOST', '--remote', 'Remote host') do |remote|
     mode = :remote
     options[:remote_host] = remote
+  end
+  
+  options[:port] = 22
+  opts.on('-p PORT', '--port', 'Remote SSH port') do |port|
+    options[:port] = port.to_i 
+  end
+
+  options[:user] = 'root'
+  opts.on('-u USER', '--user', 'Remote user') do |user|
+    options[:user] = user
   end
 end
 optparse.parse!
 
-abort 'Must run as root!' unless Process.uid == 0
 launch_tcpdump(mode, options)
 puts 'Finished.'
 
