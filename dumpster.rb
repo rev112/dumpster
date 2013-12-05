@@ -45,6 +45,7 @@ end
 def launch_local(options = {})
   pids = []
   main_pid = Process.pid
+  puts ">>> Parent PID: #{main_pid}\n"
   PORTS.each do |p|
     newpid = fork do
       # child
@@ -80,8 +81,9 @@ def launch_remote(options = {})
     pids = []
     out_pipes = []
     PORTS.each do |port|
-      next if port[0] == 'u'
-      port = port[1..-1]
+      next if get_proto(port) == 'u'
+      abort ">>> HEHE, SSH PORT, NICE TRY!\n" if port == 't' + options[:port]
+      port = get_portnum(port)
       tcpdump_str = "tcpdump -U -i lo -w - tcp port #{port}"
       # perl_wrapper_str = %q(perl -e 'print STDERR "$$\n";exec "@ARGV";print STDERR $!')
       shell_wrapper_str = %q(echo $$>&2; exec)
@@ -183,7 +185,7 @@ optparse = OptionParser.new do |opts|
     mode = :remote
     options[:remote_host] = remote
   end
-  
+
   options[:port] = 22
   opts.on('-p PORT', '--port', 'Remote SSH port') do |port|
     options[:port] = port.to_i 
