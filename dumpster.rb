@@ -141,6 +141,7 @@ end
 
 # Common function
 def launch_tcpdump(mode, options = {})
+  abort "Must run as root!" if mode == :local and Process.uid != 0
   check_ports()
   Dir.chdir(SCRIPT_DIR)
   outdir = options[:outdir]
@@ -159,7 +160,6 @@ def launch_tcpdump(mode, options = {})
 
   case mode
   when :local
-    abort 'Must run as root!' unless Process.uid == 0
     launch_local(options)
   when :remote
     launch_remote(options)
@@ -172,13 +172,17 @@ end
 ### MAIN
 
 options = {}
-options[:outdir] = DEFAULT_OUTDIR
 mode = :local
-remote_host = nil
 
 optparse = OptionParser.new do |opts|
+
+  options[:outdir] = DEFAULT_OUTDIR
   opts.on('-o OUTDIR', '--outdir', 'Output directory (default: OUTDUMPS)') do |out|
     options[:outdir] = out
+  end
+
+  opts.on('-g', '--generate', 'Generate new output directory name (using date)') do 
+    options[:outdir] = Time.now.strftime("%d_%b_%H_%M_%S")
   end
 
   opts.on('-h', '--help', 'Show usage') do |out|
