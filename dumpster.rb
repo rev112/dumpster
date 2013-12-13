@@ -47,6 +47,7 @@ end
 # Launch local capture
 def launch_local(options = {})
   puts ">>> Starting local capture..."
+  puts ">>> Writing dumps to directory: #{options[:outdir]}"
   pids = []
   main_pid = Process.pid
   puts ">>> Parent PID: #{main_pid}\n"
@@ -61,8 +62,9 @@ def launch_local(options = {})
       Dir.chdir(newdir)
       File.chmod(0700, '.')
       filter_address = options[:address] ? "and host #{options[:address]}" : ''
+      filename = Time.now.strftime("%d_%b_%H_%M_%S") + "_#{p}.pcap"
       exec_str = <<-EXEC
-tcpdump -Z root -i #{options[:interface]} -w #{LOCAL_OUTFILE}_#{p}.pcap \
+tcpdump -Z root -i #{options[:interface]} -w #{filename} \
 -C #{MAXSIZE} #{proto} port #{portnum} #{filter_address}\
   || kill -s INT #{main_pid}
       EXEC
@@ -150,7 +152,7 @@ def launch_tcpdump(mode, options = {})
     res = ''
     puts "Output directory '#{outdir}' already exists."
     until ['y', 'n'].include? res.downcase
-      print "Overwrite? [y/n] "
+      print "Write to the same directory? [y/n] "
       res = gets().chomp
     end
     exit(1) if res == 'n'
