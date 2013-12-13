@@ -60,7 +60,12 @@ def launch_local(options = {})
       Dir.mkdir(newdir) unless File.exists?(newdir)
       Dir.chdir(newdir)
       File.chmod(0700, '.')
-      exec_str = "tcpdump -Z root -i #{options[:interface]} -w #{LOCAL_OUTFILE}_#{p}.pcap -C #{MAXSIZE} #{proto} port #{portnum} || kill -s INT #{main_pid}"
+      filter_address = options[:address] ? "and host #{options[:address]}" : ''
+      exec_str = <<-EXEC
+tcpdump -Z root -i #{options[:interface]} -w #{LOCAL_OUTFILE}_#{p}.pcap \
+-C #{MAXSIZE} #{proto} port #{portnum} #{filter_address}\
+  || kill -s INT #{main_pid}
+      EXEC
       puts exec_str
       exec exec_str
     end
@@ -199,6 +204,10 @@ optparse = OptionParser.new do |opts|
   options[:interface] = 'lo'
   opts.on('-i INTERFACE', '--interface', 'Capture interface (default: lo)') do |i|
     options[:interface] = i
+  end
+
+  opts.on('-a ADDRESS', '--address', 'Filter packets for a specific address') do |a|
+    options[:address] = a
   end
 end
 optparse.parse!
