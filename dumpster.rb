@@ -46,8 +46,11 @@ end
 
 # Launch local capture
 def launch_local(options = {})
-  puts ">>> Starting local capture..."
-  puts ">>> Writing dumps to directory: #{options[:outdir]}"
+  puts <<-INIT_INFO
+>>> Starting local capture...
+>>> Interface: * #{options[:interface]} *
+>>> Writing dumps to directory: #{options[:outdir]}
+  INIT_INFO
   pids = []
   main_pid = Process.pid
   puts ">>> Parent PID: #{main_pid}\n"
@@ -100,7 +103,6 @@ def launch_remote(options = {})
       tcpdump_str = "tcpdump -U -i #{options[:interface]} -w - #{proto} port #{portnum}"
       shell_wrapper_str = %q(echo $$>&2; exec)
       exec_str = "#{shell_wrapper_str} #{tcpdump_str}"
-      is_pid_str = true
       newdir = SCRIPT_DIR + '/' + options[:outdir] + '/' + "port_#{port}"
       Dir.mkdir(newdir) unless File.exists?(newdir)
       File.chmod(0700, newdir)
@@ -108,6 +110,7 @@ def launch_remote(options = {})
       split_out = IO.popen(popen_str, 'wb')
       puts popen_str
       out_pipes << split_out
+      is_pid_str = true
       ssh.exec(exec_str) do |ch, stream, data|
         case stream
           when :stdout
@@ -183,7 +186,7 @@ optparse = OptionParser.new do |opts|
     options[:outdir] = out
   end
 
-  opts.on('-g', '--generate', 'Generate new output directory name (using date)') do 
+  opts.on('-g', '--generate', 'Generate new output directory name (using date)') do
     options[:outdir] = Time.now.strftime("%d_%b_%H_%M_%S")
   end
 
@@ -199,7 +202,7 @@ optparse = OptionParser.new do |opts|
 
   options[:port] = 22
   opts.on('-p PORT', '--port', 'Remote SSH port (default: 22)') do |port|
-    options[:port] = port.to_i 
+    options[:port] = port.to_i
   end
 
   options[:user] = 'root'
