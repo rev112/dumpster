@@ -22,9 +22,18 @@ Tested on: Fedora 18/19 x64.
 
 #### Local capture
 
-Launch **dumpster** (default output directory is 'OUTDUMPS')
+Launch **dumpster** (default output directory is 'OUTDUMPS'):
 
     `./dumpster.rb -o OUTDIR`
+
+You can specify interface and address to filter for:
+
+    `./dumpster.rb -i eth0 -a 10.23.23.2`
+
+Tired of coming up with output directory names? Use '-g' flag:
+
+    `./dumpster.rb -g  # Will create the directory with the name like 17_Dec_19_13_46/`
+
 
 #### Remote capture
 
